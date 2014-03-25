@@ -231,9 +231,17 @@ func (r *rowsRes) Columns() []string {
 }
 
 func (r *rowsRes) Close() error {
+		
 	if r.my == nil {
-		return nil // closed before
+		return nil // closed before	
 	}
+	
+	// iterate through all of the remaining rows and sets of results
+	var dest []driver.Value
+	for r.Next(dest); len(dest) > 0; {
+		// fmt.Println("Next")
+	}
+	
 	if err := r.my.End(); err != nil {
 		return errFilter(err)
 	}
@@ -242,11 +250,13 @@ func (r *rowsRes) Close() error {
 			return errFilter(err)
 		}
 	}
+	
 	r.my = nil
 	return nil
 }
 
 // DATE, DATETIME, TIMESTAMP are treated as they are in Local time zone
+// This will also iterate over multiple result sets
 func (r *rowsRes) Next(dest []driver.Value) error {
 	if r.my == nil {
 		return io.EOF // closed before
@@ -270,6 +280,27 @@ func (r *rowsRes) Next(dest []driver.Value) error {
 		}
 		return nil
 	}
+	
+	// we reached the end of the current result set
+	if err == io.EOF {
+		
+		// check to see if there are any more result sets
+		if !r.my.StatusOnly() {
+			
+			// advance to the next result set
+		    if r.my, err = r.my.NextResult(); r.my == nil {
+		      	return errFilter(err);
+		    }
+			
+			// scan the first row of the next result set
+			if !r.my.StatusOnly() {
+				return r.Next(dest)
+			}
+			
+		}
+		
+	}
+	
 	if err != io.EOF {
 		return errFilter(err)
 	}
